@@ -422,6 +422,7 @@ namespace eosio { namespace chain {
    }
 
    void transaction_context::validate_cpu_usage_to_bill( int64_t billed_us, bool check_minimum )const {
+      /*
       if (!control.skip_trx_checks()) {
          if( check_minimum ) {
             const auto& cfg = control.get_global_properties().configuration;
@@ -453,6 +454,7 @@ namespace eosio { namespace chain {
             }
          }
       }
+      */
    }
 
    void transaction_context::add_ram_usage( account_name account, int64_t ram_delta ) {
