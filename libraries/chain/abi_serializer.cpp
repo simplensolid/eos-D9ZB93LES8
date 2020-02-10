@@ -109,6 +109,7 @@ namespace eosio { namespace chain {
       structs.clear();
       actions.clear();
       tables.clear();
+      kv_tables.clear();
       error_messages.clear();
       variants.clear();
 
@@ -126,6 +127,9 @@ namespace eosio { namespace chain {
       for( const auto& t : abi.tables )
          tables[t.name] = t.type;
 
+      for( const auto& t : abi.kv_tables )
+         kv_tables[t.name] = t.type;
+
       for( const auto& e : abi.error_messages )
          error_messages[e.error_code] = e.error_msg;
 
@@ -140,6 +144,7 @@ namespace eosio { namespace chain {
       EOS_ASSERT( structs.size() == abi.structs.size(), duplicate_abi_struct_def_exception, "duplicate struct definition detected" );
       EOS_ASSERT( actions.size() == abi.actions.size(), duplicate_abi_action_def_exception, "duplicate action definition detected" );
       EOS_ASSERT( tables.size() == abi.tables.size(), duplicate_abi_table_def_exception, "duplicate table definition detected" );
+      EOS_ASSERT( kv_tables.size() == abi.kv_tables.size(), duplicate_abi_table_def_exception, "duplicate kv table definition detected" );
       EOS_ASSERT( error_messages.size() == abi.error_messages.size(), duplicate_abi_err_msg_def_exception, "duplicate error message definition detected" );
       EOS_ASSERT( variants.size() == abi.variants.value.size(), duplicate_abi_variant_def_exception, "duplicate variant definition detected" );
 
@@ -258,6 +263,11 @@ namespace eosio { namespace chain {
       } FC_CAPTURE_AND_RETHROW( (a)  ) }
 
       for( const auto& t : tables ) { try {
+        ctx.check_deadline();
+        EOS_ASSERT(_is_type(t.second, ctx), invalid_type_inside_abi, "${type}", ("type",t.second) );
+      } FC_CAPTURE_AND_RETHROW( (t)  ) }
+
+      for( const auto& t : kv_tables ) { try {
         ctx.check_deadline();
         EOS_ASSERT(_is_type(t.second, ctx), invalid_type_inside_abi, "${type}", ("type",t.second) );
       } FC_CAPTURE_AND_RETHROW( (t)  ) }
@@ -531,6 +541,11 @@ namespace eosio { namespace chain {
    type_name abi_serializer::get_table_type(name action)const {
       auto itr = tables.find(action);
       if( itr != tables.end() ) return itr->second;
+      return type_name();
+   }
+   type_name abi_serializer::get_kv_table_type(name action)const {
+      auto itr = kv_tables.find(action);
+      if( itr != kv_tables.end() ) return itr->second;
       return type_name();
    }
 
