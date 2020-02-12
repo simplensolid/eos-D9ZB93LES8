@@ -70,18 +70,20 @@ struct table_def {
    type_name          type;        // type of binary data stored in this table
 };
 
+struct kv_index_def {
+   type_name type;
+};
+
 struct kv_table_def {
    kv_table_def() = default;
-   kv_table_def(const table_name& name, const type_name& index_type, const type_name& type)
-   :name(name), index_type(index_type), type(type)
+   kv_table_def(const table_name& name, const type_name& type, const type_name& primary_index_type, const vector<kv_index_def>& secondary_indices)
+   :name(name), type(type), primary_index_type(primary_index_type), secondary_indices(secondary_indices)
    {}
 
-   table_name         name;
-   type_name          index_type;
-   type_name          type;
-
-   // TODO: does this make sense?
-   // kv_index_def    indices;
+   table_name           name;
+   type_name            type;
+   type_name            primary_index_type;
+   vector<kv_index_def> secondary_indices;
 };
 
 struct clause_pair {
@@ -177,7 +179,8 @@ FC_REFLECT( eosio::chain::field_def                        , (name)(type) )
 FC_REFLECT( eosio::chain::struct_def                       , (name)(base)(fields) )
 FC_REFLECT( eosio::chain::action_def                       , (name)(type)(ricardian_contract) )
 FC_REFLECT( eosio::chain::table_def                        , (name)(index_type)(key_names)(key_types)(type) )
-FC_REFLECT( eosio::chain::kv_table_def                     , (name)(index_type)(type) )
+FC_REFLECT( eosio::chain::kv_index_def                     , (type) )
+FC_REFLECT( eosio::chain::kv_table_def                     , (name)(type)(primary_index_type)(secondary_indices) )
 FC_REFLECT( eosio::chain::clause_pair                      , (id)(body) )
 FC_REFLECT( eosio::chain::error_message                    , (error_code)(error_msg) )
 FC_REFLECT( eosio::chain::variant_def                      , (name)(types) )
