@@ -13,6 +13,8 @@
 #include <eosio/chain/types.hpp>
 #include <eosio/chain/fixed_bytes.hpp>
 
+#include <eosio/chain/kv_context.hpp>
+
 #include <boost/container/flat_set.hpp>
 #include <boost/multiprecision/cpp_int.hpp>
 
@@ -392,6 +394,27 @@ public:
 
    get_scheduled_transactions_result get_scheduled_transactions( const get_scheduled_transactions_params& params ) const;
 
+   struct get_kv_table_rows_params {
+      bool        json = false;
+      name        code;
+      name        table;
+      name        database_id;
+      name        index_name;
+      string      table_key;
+      string      key_type;  // type of key specified by index_name
+      /*
+      string      table_key;
+      string      lower_bound;
+      string      upper_bound;
+      uint32_t    limit = 10;
+      string      key_type;  // type of key specified by index_position
+      string      index_position; // 1 - primary (first), 2 - secondary index (in order defined by multi_index), 3 - third index, etc
+      string      encode_type{"dec"}; //dec, hex , default=dec
+      optional<bool>  reverse;
+      optional<bool>  show_payer; // show RAM pyer
+      */
+    };
+
    static void copy_inline_row(const chain::key_value_object& obj, vector<char>& data) {
       data.resize( obj.value.size() );
       memcpy( data.data(), obj.value.data(), obj.value.size() );
@@ -582,6 +605,29 @@ public:
          }
       }
       return result;
+   }
+
+   template <typename IndexType>
+   void get_kv_table_rows_ex( const read_only::get_kv_table_rows_params& p, const abi_def& abi )const {
+      auto& d = const_cast<chainbase::database&>(db.db());
+      auto kv_context = chain::create_kv_chainbase_context(d, p.database_id, chain::name{0}, {}, {});
+
+      abi_serializer abis;
+      abis.set_abi(abi, abi_serializer_max_time);
+
+
+      string key; // TODO: ?????
+
+      auto prefix = make_prefix(p.table, p.index_name);
+      auto k = table_key(prefix, make_key(key));
+
+      /* TODO
+       * 1. Copy over some make_prefix && make_key implementations from CDT
+       * 2. Create an iterator
+       * 3. Determine appropriate lower and upper bound lookup
+       * 4. Get lower &&/|| upper bound from params
+       * 5. Iterate and add to data
+       */
    }
 
    chain::symbol extract_core_symbol()const;
