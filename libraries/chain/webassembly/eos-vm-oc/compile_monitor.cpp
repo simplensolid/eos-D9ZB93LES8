@@ -248,6 +248,11 @@ void launch_compile_monitor(int nodeos_fd) {
    sigaddset(&set, SIGQUIT);
    sigprocmask(SIG_BLOCK, &set, nullptr);
 
+   struct sigaction sa;
+   sa.sa_handler =  SIG_DFL;
+   sa.sa_flags = SA_NOCLDWAIT;
+   sigaction(SIGCHLD, &sa, nullptr);
+
    int socks[2]; //0: local trampoline socket, 1: the one we give to trampoline
    socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, socks);
    pid_t child = fork();
@@ -271,34 +276,41 @@ void launch_compile_monitor(int nodeos_fd) {
    _exit(0);
 }
 
-struct compile_monitor_trampoline {
-   void start() {
-      //create communication socket; let's hold off on asio usage until all forks are done
-      int socks[2];
-      socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, socks);
-      compile_manager_fd = socks[0];
+compile_monitor_trampoline* the_compile_monitor_trampoline = nullptr;
+compile_monitor_trampoline::compile_monitor_trampoline() {
+      FC_ASSERT(nullptr == the_compile_monitor_trampoline, "Compile monitor singleton already exists");
+       the_compile_monitor_trampoline = this;
+}
 
-      compile_manager_pid = fork();
-      if(compile_manager_pid == 0) {
-         close(socks[0]);
-         launch_compile_monitor(socks[1]);
-      }
-      close(socks[1]);
-   }
+compile_monitor_trampoline::~compile_monitor_trampoline() {
+   the_compile_monitor_trampoline = nullptr;
+}
 
-   pid_t compile_manager_pid = -1;
-   int compile_manager_fd = -1;
-};
+void compile_monitor_trampoline::start() {
+//create communication socket; let's hold off on asio usage until all forks are done
+   int socks[2];
+   socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, socks);
+   compile_manager_fd = socks[0];
+   compile_manager_pid = fork();
+   if (compile_manager_pid == 0) {
+     close(socks[0]);
+     launch_compile_monitor(socks[1]);
+  }
 
-static compile_monitor_trampoline the_compile_monitor_trampoline;
+  close(socks[1]);
+}
+
+/*
 extern "C" int __real_main(int, char*[]);
 extern "C" int __wrap_main(int argc, char* argv[]) {
    the_compile_monitor_trampoline.start();
    return __real_main(argc, argv);
 }
 
+*/
+
 wrapped_fd get_connection_to_compile_monitor(int cache_fd) {
-   FC_ASSERT(the_compile_monitor_trampoline.compile_manager_pid >= 0, "EOS VM oop connection doesn't look active");
+   FC_ASSERT(the_compile_monitor_trampoline->compile_manager_pid >= 0, "EOS VM oop connection doesn't look active");
 
    int socks[2]; //0: our socket to compile_manager_session, 1: socket we'll give to compile_maanger_session
    socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, socks);
@@ -314,13 +326,14 @@ wrapped_fd get_connection_to_compile_monitor(int cache_fd) {
    std::vector<wrapped_fd> fds_to_pass; 
    fds_to_pass.emplace_back(std::move(socket_to_hand_to_monitor_session));
    fds_to_pass.emplace_back(std::move(dup_cache_fd));
-   write_message_with_fds(the_compile_monitor_trampoline.compile_manager_fd, initialize_message(), fds_to_pass);
+   write_message_with_fds(the_compile_monitor_trampoline->compile_manager_fd, initialize_message(), fds_to_pass);
 
-   auto [success, message, fds] = read_message_with_fds(the_compile_monitor_trampoline.compile_manager_fd);
+   auto [success, message, fds] = read_message_with_fds(the_compile_monitor_trampoline->compile_manager_fd);
    EOS_ASSERT(success, misc_exception, "failed to read response from monitor process");
    EOS_ASSERT(message.contains<initalize_response_message>(), misc_exception, "unexpected response from monitor process");
    EOS_ASSERT(!message.get<initalize_response_message>().error_message, misc_exception, "Error message from monitor process: ${e}", ("e", *message.get<initalize_response_message>().error_message));
    return socket_to_monitor_session;
 }
+
 
 }}}

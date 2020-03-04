@@ -115,9 +115,9 @@ target_include_directories( eosio_chain
                                    "${CMAKE_BINARY_DIR}/libraries/wabt"
                             )
 
-if("eos-vm-oc" IN_LIST EOSIO_WASM_RUNTIMES)
-   target_link_libraries(eosio_chain "-Wl,-wrap=main")
-endif()
+#if("eos-vm-oc" IN_LIST EOSIO_WASM_RUNTIMES)
+#   target_link_libraries(eosio_chain "-Wl,-wrap=main")
+#endif()
 
 foreach(RUNTIME ${EOSIO_WASM_RUNTIMES})
    string(TOUPPER "${RUNTIME}" RUNTIMEUC)

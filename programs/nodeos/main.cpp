@@ -12,7 +12,7 @@
 
 #include <boost/dll/runtime_symbol_info.hpp>
 #include <boost/exception/diagnostic_information.hpp>
-
+#include <eosio/chain/webassembly/eos-vm-oc/compile_monitor.hpp>
 #include "config.hpp"
 
 using namespace appbase;
@@ -81,7 +81,10 @@ enum return_codes {
 
 int main(int argc, char** argv)
 {
-   try {
+    chain::eosvmoc::compile_monitor_trampoline tramp;
+    tramp.start();
+
+    try {
       app().set_version(eosio::nodeos::config::version);
       app().set_version_string(eosio::version::version_client());
       app().set_full_version_string(eosio::version::version_full());
