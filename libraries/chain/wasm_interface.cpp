@@ -13,6 +13,7 @@
 #include <eosio/chain/global_property_object.hpp>
 #include <eosio/chain/protocol_state_object.hpp>
 #include <eosio/chain/account_object.hpp>
+#include <eosio/chain/evm/ecl.hpp>
 #include <fc/exception/exception.hpp>
 #include <fc/crypto/sha256.hpp>
 #include <fc/crypto/sha1.hpp>
@@ -28,6 +29,11 @@
 #if defined(EOSIO_EOS_VM_RUNTIME_ENABLED) || defined(EOSIO_EOS_VM_JIT_RUNTIME_ENABLED)
 #include <eosio/vm/allocator.hpp>
 #endif
+
+extern "C" {
+   extern void* secp256k1_context_create(int);
+   extern int secp256k1_ecdsa_recover_compact(const void*,const unsigned char*,const unsigned char*,unsigned char*,int*,int,int);
+}
 
 namespace eosio { namespace chain {
    using namespace webassembly::common;
@@ -908,6 +914,55 @@ class crypto_api : public context_aware_api {
 
       void ripemd160(array_ptr<char> data, uint32_t datalen, fc::ripemd160& hash_val) {
          hash_val = encode<fc::ripemd160::encoder>( data, datalen );
+      }
+
+      void evm_keccak256(array_ptr<char> data, uint32_t datalen, fc::sha256& hash_val) {
+         evm::evm_keccak256(data.value, datalen, hash_val.data());
+      }
+
+      void evm_ecrecover(const fc::sha256& digest, array_ptr<char> sig, uint32_t siglen, array_ptr<char> pub, uint32_t publen) {
+         //evm::evm_ecrecover(digest.data(), sig.value, siglen, pub.value, publen);
+         EOS_ASSERT(siglen == 65, wasm_execution_error, "invalid ECC signature length");
+         EOS_ASSERT(27 <= sig.value[0] && sig.value[0] <= 28, wasm_execution_error, "invalid ECC signature");
+         EOS_ASSERT(publen == 65, wasm_execution_error, "invalid ECC public key length");
+         static void *ctx = secp256k1_context_create(1);
+         int pubkeylen = publen;
+         int res = secp256k1_ecdsa_recover_compact(ctx, (const unsigned char*)digest.data(), (const unsigned char*)&sig.value[1], (unsigned char*)pub.value, &pubkeylen, 0, sig.value[0] - 27);
+         if (res == 0) { pub.value[0] = 4; for (uint64_t i = 1; i < publen; i++) pub.value[i] = 0; }
+      }
+
+      void evm_bigmodexp(array_ptr<char> base, uint32_t baselen, array_ptr<char> exp, uint32_t explen, array_ptr<char> mod, uint32_t modlen, array_ptr<char> output, uint32_t outlen) {
+         //evm::evm_bigmodexp(base.value, baselen, exp.value, explen, mod.value, modlen, output.value, outlen);
+         BN_CTX *ctx = BN_CTX_new();
+         BIGNUM *a = BN_bin2bn((const unsigned char*)base.value, baselen, NULL);
+         BIGNUM *p = BN_bin2bn((const unsigned char*)exp.value, explen, NULL);
+         BIGNUM *m = BN_bin2bn((const unsigned char*)mod.value, modlen, NULL);
+         BIGNUM *r = BN_new();
+         BN_mod_exp(r, a, p, m, ctx);
+         BN_bn2binpad(r, (unsigned char*)output.value, outlen);
+         BN_free(r);
+         BN_free(m);
+         BN_free(p);
+         BN_free(a);
+         BN_CTX_free(ctx);
+      }
+
+      void evm_bn256add(const fc::sha512& point1, const fc::sha512& point2, fc::sha512& point3) {
+         evm::evm_bn256add(point1.data(), point2.data(), point3.data());
+      }
+
+      void evm_bn256scalarmul(const fc::sha512& point1, const fc::sha256& scalar, fc::sha512& point2) {
+         evm::evm_bn256scalarmul(point1.data(), scalar.data(), point2.data());
+      }
+
+      bool evm_bn256pairing(array_ptr<fc::sha512> point_twistx_twisty_list, uint32_t count) {
+         return evm::evm_bn256pairing((const char*)point_twistx_twisty_list.value, count);
+      }
+
+      void evm_blake2f(array_ptr<char> data, uint32_t datalen, fc::sha512& state, array_ptr<char> offset, uint32_t offsetlen, uint32_t last, uint32_t rounds) {
+         EOS_ASSERT(datalen == 128, wasm_execution_error, "invalid data length");
+         EOS_ASSERT(offsetlen == 16, wasm_execution_error, "invalid offset length");
+         evm::evm_blake2f(data.value, state.data(), offset.value, last > 0, rounds);
       }
 };
 
@@ -1934,6 +1989,13 @@ REGISTER_INTRINSICS(crypto_api,
    (sha256,                 void(int, int, int)           )
    (sha512,                 void(int, int, int)           )
    (ripemd160,              void(int, int, int)           )
+   (evm_keccak256,          void(int, int, int)                          )
+   (evm_ecrecover,          void(int, int, int, int, int)                )
+   (evm_bigmodexp,          void(int, int, int, int, int, int, int, int) )
+   (evm_bn256add,           void(int, int, int)                          )
+   (evm_bn256scalarmul,     void(int, int, int)                          )
+   (evm_bn256pairing,       int(int, int)                                )
+   (evm_blake2f,            void(int, int, int, int, int, int, int)      )
 );
 
 

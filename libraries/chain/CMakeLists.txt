@@ -82,6 +82,7 @@ add_library( eosio_chain
               asset.cpp
               snapshot.cpp
 
+             evm/ecl.cpp
              webassembly/wabt.cpp
              ${CHAIN_EOSVMOC_SOURCES}
              ${CHAIN_EOSVM_SOURCES}
